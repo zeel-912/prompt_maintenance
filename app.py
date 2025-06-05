@@ -1,12 +1,13 @@
 import streamlit as st
 from pymongo import MongoClient
 from datetime import date
-from streamlit import markdown as st_markdown
+import os
 
 st.set_page_config(layout="wide")
 
 # ---- MongoDB Connection ----
-client = MongoClient("mongodb://localhost:27017/")
+mongo_uri = os.getenv("MONGODB_URI", "mongodb://localhost:27017/")
+client = MongoClient(mongo_uri)
 db = client["prompt_maintenance"]
 prompt_collection = db["prompts"]
 
@@ -21,8 +22,18 @@ def get_all_prompts():
 status_order = {"Approved": 0, "Draft": 1, "Deprecated": 2}
 all_prompts = get_all_prompts()
 
+search_query = st.sidebar.text_input("Search", "")
+if search_query:
+    filtered = [
+        p for p in all_prompts
+        if search_query.lower() in p.get("title", "").lower()
+        or search_query.lower() in ",".join(p.get("tags", [])).lower()
+    ]
+else:
+    filtered = all_prompts
+
 all_prompts_sorted = sorted(
-    all_prompts,
+    filtered,
     key=lambda p: (status_order.get(p.get("status", "Draft"), 1), p.get("title", ""))
 )
 
@@ -193,42 +204,39 @@ save_error = None
 with col3:
     if st.button("💾 Save Draft"):
         try:
-            data_to_save = fields.copy()
-            if is_new:
-                data_to_save['prompt_id'] = get_new_prompt_id()
-                prompt_collection.insert_one(data_to_save)
-                st.success("Prompt created!")
-                st.session_state.pop('fields')
-                st.experimental_rerun()
-            else:
-                prompt_collection.update_one({"_id": doc["_id"]}, {"$set": data_to_save})
-                st.success("Prompt updated!")
-                st.session_state.pop('fields')
-                st.experimental_rerun()
+            with st.spinner("Saving..."):
+                data_to_save = fields.copy()
+                if is_new:
+                    data_to_save['prompt_id'] = get_new_prompt_id()
+                    prompt_collection.insert_one(data_to_save)
+                else:
+                    prompt_collection.update_one({"_id": doc["_id"]}, {"$set": data_to_save})
+            st.success("Prompt created!" if is_new else "Prompt updated!")
+            st.session_state.pop('fields')
+            st.experimental_rerun()
         except Exception as e:
             save_error = str(e)
 with col4:
     if st.button("✅ Approve"):
         try:
-            fields['status'] = "Approved"
-            data_to_save = fields.copy()
-            if is_new:
-                data_to_save['prompt_id'] = get_new_prompt_id()
-                prompt_collection.insert_one(data_to_save)
-                st.success("Prompt approved and created!")
-                st.session_state.pop('fields')
-                st.experimental_rerun()
-            else:
-                prompt_collection.update_one({"_id": doc["_id"]}, {"$set": data_to_save})
-                st.success("Prompt approved!")
-                st.session_state.pop('fields')
-                st.experimental_rerun()
+            with st.spinner("Saving..."):
+                fields['status'] = "Approved"
+                data_to_save = fields.copy()
+                if is_new:
+                    data_to_save['prompt_id'] = get_new_prompt_id()
+                    prompt_collection.insert_one(data_to_save)
+                else:
+                    prompt_collection.update_one({"_id": doc["_id"]}, {"$set": data_to_save})
+            st.success("Prompt approved and created!" if is_new else "Prompt approved!")
+            st.session_state.pop('fields')
+            st.experimental_rerun()
         except Exception as e:
             save_error = str(e)
 with col5:
     if not is_new and st.button("🗑️ Delete"):
         try:
-            prompt_collection.delete_one({"_id": doc["_id"]})
+            with st.spinner("Deleting..."):
+                prompt_collection.delete_one({"_id": doc["_id"]})
             st.success("Prompt deleted!")
             st.session_state.pop('fields')
             st.experimental_rerun()
