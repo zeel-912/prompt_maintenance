@@ -134,7 +134,11 @@ with col1:
 with col2:
     fields['status'] = st.selectbox("Status", ["Draft", "Approved", "Deprecated"], index=["Draft", "Approved", "Deprecated"].index(fields['status']), key='status')
     fields['model'] = st.selectbox("Model Used", ["gpt-4", "gpt-4o", "gpt-3.5-turbo"], index=["gpt-4", "gpt-4o", "gpt-3.5-turbo"].index(fields['model']), key='model')
-    fields['tags'] = st.multiselect("Tags", ["QA", "Banking", "User Story", "Chat", "NLP"], default=fields['tags'], key='tags')
+    all_tags = sorted(t for t in prompt_collection.distinct("tags") if t)
+    selected_tags = st.multiselect("Tags", all_tags, default=fields['tags'], key='tags')
+    new_tags_str = st.text_input("Add custom tags (comma-separated)", key='custom_tags')
+    new_tags = [t.strip() for t in new_tags_str.split(',') if t.strip()]
+    fields['tags'] = list(dict.fromkeys(selected_tags + new_tags))
 
 st.markdown("### 🧠 Prompt Text")
 fields['prompt_body'] = st.text_area("", value=fields['prompt_body'], height=300, label_visibility="collapsed", key='prompt_body')
